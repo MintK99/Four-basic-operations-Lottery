@@ -29,49 +29,51 @@ export function ItemPanel() {
           🃏 카드 교체
         </h2>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${canUseItem ? 'bg-blue-700 text-blue-200' : 'bg-gray-700 text-gray-500'}`}>
-          남은 횟수: {usesLeft} / {GAME_CONFIG.ITEM_USES_PER_ROUND}
+          남은 횟수: {usesLeft}
         </span>
       </div>
 
-      {!canUseItem ? (
-        <p className="text-xs text-gray-500">이번 라운드 교체 횟수를 모두 사용했습니다.</p>
-      ) : (
-        <>
-          <p className="text-xs text-gray-400 mb-2">교체할 카드를 선택하세요</p>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {myPlayer.cards.map((card) => (
-              <button
-                key={card.id}
-                onClick={() => setSelectedCardId(card.id === selectedCardId ? null : card.id)}
-                className={`
-                  w-10 h-12 rounded-lg border-2 font-bold text-lg transition-all
-                  ${
-                    card.id === selectedCardId
-                      ? 'bg-red-600 border-red-400 text-white scale-110'
-                      : 'bg-lottery-dark border-lottery-panel text-white hover:border-gray-400'
-                  }
-                `}
-              >
-                {card.value}
-              </button>
-            ))}
-          </div>
+      <p className="text-xs text-gray-400 mb-2">
+        {canUseItem ? '교체할 카드를 선택하세요' : '이번 라운드 교체 횟수를 모두 사용했습니다.'}
+      </p>
+
+      {/* 카드는 항상 표시 */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {myPlayer.cards.map((card) => (
           <button
-            onClick={handleUseItem}
-            disabled={!selectedCardId}
+            key={card.id}
+            disabled={!canUseItem}
+            onClick={() => canUseItem && setSelectedCardId(card.id === selectedCardId ? null : card.id)}
             className={`
-              w-full py-2 rounded-lg text-sm font-medium transition-all
+              w-10 h-12 rounded-lg border-2 font-bold text-lg transition-all
               ${
-                selectedCardId
-                  ? 'bg-blue-600 text-white hover:bg-blue-500 active:scale-95'
-                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                card.id === selectedCardId
+                  ? 'bg-red-600 border-red-400 text-white scale-110'
+                  : canUseItem
+                  ? 'bg-lottery-dark border-lottery-panel text-white hover:border-gray-400 cursor-pointer'
+                  : 'bg-lottery-dark border-lottery-panel text-gray-400 cursor-not-allowed'
               }
             `}
           >
-            카드 교체 (라운드당 {GAME_CONFIG.ITEM_USES_PER_ROUND}회)
+            {card.value}
           </button>
-        </>
-      )}
+        ))}
+      </div>
+
+      <button
+        onClick={handleUseItem}
+        disabled={!selectedCardId || !canUseItem}
+        className={`
+          w-full py-2 rounded-lg text-sm font-medium transition-all
+          ${
+            selectedCardId && canUseItem
+              ? 'bg-blue-600 text-white hover:bg-blue-500 active:scale-95'
+              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+          }
+        `}
+      >
+        카드 교체
+      </button>
     </div>
   );
 }

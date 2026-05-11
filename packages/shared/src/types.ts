@@ -113,5 +113,5 @@ export const GAME_CONFIG = {
   OPERATORS: ['+', '-', '×', '÷', '^', '★'] as Operator[],
   BUZZ_TIMEOUT_MS: 30_000,
   ROUND_TIMEOUT_MS: 180_000,
-  ITEM_USES_PER_ROUND: 4, // 라운드당 카드 교체 최대 횟수
+  ITEM_USES_PER_ROUND: 1000, // 라운드당 카드 교체 최대 횟수
 } as const;
