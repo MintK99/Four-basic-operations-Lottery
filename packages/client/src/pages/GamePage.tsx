@@ -83,6 +83,23 @@ export function GamePage() {
               호스트가 시작하기를 기다리는 중...
             </p>
           )}
+          {phase !== 'LOBBY' && phase !== 'GAME_OVER' && isHost && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-gray-500 text-center">호스트 전용</p>
+              <button
+                onClick={() => socket.emit('game:reroll_dice', () => {})}
+                className="py-2 bg-blue-700 text-white text-sm font-bold rounded-xl hover:bg-blue-600 transition-all active:scale-95"
+              >
+                🎲 주사위 다시 굴리기
+              </button>
+              <button
+                onClick={() => socket.emit('game:redraw_numbers', () => {})}
+                className="py-2 bg-purple-700 text-white text-sm font-bold rounded-xl hover:bg-purple-600 transition-all active:scale-95"
+              >
+                🔄 당첨번호 다시 뽑기
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 중앙 패널 */}

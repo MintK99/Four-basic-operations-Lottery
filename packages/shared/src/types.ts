@@ -57,6 +57,8 @@ export interface ClientToServerEvents {
   'game:buzz': (payload: { clientTimestamp: number }) => void;
   'game:submit': (payload: FormulaSubmission, cb: (res: SubmitResponse) => void) => void;
   'game:use_item': (payload: { cardId: string }, cb: (res: AckResponse) => void) => void;
+  'game:reroll_dice': (cb: (res: AckResponse) => void) => void;
+  'game:redraw_numbers': (cb: (res: AckResponse) => void) => void;
 }
 
 export interface ServerToClientEvents {

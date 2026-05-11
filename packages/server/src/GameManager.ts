@@ -109,6 +109,28 @@ export class GameManager {
     return room.handleUseItem(session.playerId, cardId);
   }
 
+  // ── 호스트 전용 ───────────────────────────────────────────
+
+  handleRerollDice(socketId: string): { ok: boolean; message?: string } {
+    const session = this.sessions.get(socketId);
+    if (!session) return { ok: false, message: '세션을 찾을 수 없습니다.' };
+    const room = this.rooms.get(session.roomId);
+    if (!room) return { ok: false, message: '룸을 찾을 수 없습니다.' };
+    if (room.hostId !== session.playerId) return { ok: false, message: '호스트만 사용할 수 있습니다.' };
+    room.forceRerollDice();
+    return { ok: true };
+  }
+
+  handleRedrawNumbers(socketId: string): { ok: boolean; message?: string } {
+    const session = this.sessions.get(socketId);
+    if (!session) return { ok: false, message: '세션을 찾을 수 없습니다.' };
+    const room = this.rooms.get(session.roomId);
+    if (!room) return { ok: false, message: '룸을 찾을 수 없습니다.' };
+    if (room.hostId !== session.playerId) return { ok: false, message: '호스트만 사용할 수 있습니다.' };
+    room.forceRedrawNumbers();
+    return { ok: true };
+  }
+
   // ── 연결 해제 ─────────────────────────────────────────────
 
   handleDisconnect(socketId: string): void {

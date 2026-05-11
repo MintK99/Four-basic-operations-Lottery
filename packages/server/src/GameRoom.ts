@@ -248,6 +248,29 @@ export class GameRoom {
     return payload;
   }
 
+  // ── 호스트 강제 재굴리기 ─────────────────────────────────────
+
+  forceRerollDice(): void {
+    if (this.phase === 'LOBBY' || this.phase === 'GAME_OVER') return;
+    this.clearTimers();
+    this.buzzedPlayerId = null;
+    this.buzzTimerEnd = null;
+    this.phase = 'ROLLING';
+    this.rollDice();
+  }
+
+  // ── 호스트 당첨번호 재추첨 ────────────────────────────────────
+
+  forceRedrawNumbers(): void {
+    if (this.phase === 'LOBBY' || this.phase === 'GAME_OVER') return;
+    this.winningNumbers = this.generateWinningNumbers();
+    this.remainingNumbers = [...this.winningNumbers];
+    for (const player of this.players.values()) {
+      player.completedNumbers = [];
+    }
+    this.emit({ type: 'state_changed' });
+  }
+
   // ── 아이템: 카드 교체 (라운드당 4회) ────────────────────────
 
   handleUseItem(playerId: string, cardId: string): boolean {

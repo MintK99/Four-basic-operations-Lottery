@@ -62,6 +62,14 @@ io.on('connection', (socket) => {
     cb({ ok, message: ok ? undefined : '아이템을 사용할 수 없습니다.' });
   });
 
+  socket.on('game:reroll_dice', (cb) => {
+    cb(manager.handleRerollDice(socket.id));
+  });
+
+  socket.on('game:redraw_numbers', (cb) => {
+    cb(manager.handleRedrawNumbers(socket.id));
+  });
+
   socket.on('disconnect', () => {
     console.log(`[disconnect] ${socket.id}`);
     manager.handleDisconnect(socket.id);
