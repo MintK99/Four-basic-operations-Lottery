@@ -33,9 +33,9 @@ export class GameManager {
 
     this.setupRoomEvents(room);
 
-    room.addPlayer(socket.id, playerId, playerName);
     socket.join(room.id);
     this.sessions.set(socket.id, { playerId, roomId: room.id });
+    room.addPlayer(socket.id, playerId, playerName);
 
     return { roomId: room.id, playerId };
   }
@@ -51,9 +51,9 @@ export class GameManager {
     if (!room) return { ok: false, message: '룸을 찾을 수 없습니다.' };
 
     const playerId = uuidv4();
-    room.addPlayer(socket.id, playerId, playerName);
     socket.join(roomId);
     this.sessions.set(socket.id, { playerId, roomId });
+    room.addPlayer(socket.id, playerId, playerName);
 
     return { ok: true, playerId };
   }
