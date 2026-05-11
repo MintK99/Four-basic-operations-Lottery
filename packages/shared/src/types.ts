@@ -115,7 +115,7 @@ export const GAME_CONFIG = {
   CARD_VALUE_MIN: 1 as CardValue,
   CARD_VALUE_MAX: 6 as CardValue,
   OPERATORS: ['+', '-', '×', '÷', '^', '★'] as Operator[],
-  BUZZ_TIMEOUT_MS: 15_000,
+  BUZZ_TIMEOUT_MS: 30_000,
   ROUND_TIMEOUT_MS: 180_000,
   ITEM_COOLDOWN_MS: 30 * 60_000,
 } as const;

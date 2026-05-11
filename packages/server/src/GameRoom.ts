@@ -260,22 +260,9 @@ export class GameRoom {
       this.emit({ type: 'state_changed' });
       this.rollDice();
     } else {
-      // 실패: 해당 플레이어는 이번 라운드 재도전 불가
-      player.canBuzz = false;
-      this.phase = 'ROLLING';
-      this.buzzedPlayerId = null;
-      this.buzzTimerEnd = null;
+      // 실패: 30초 타이머 내에서 재시도 가능 (BUZZED 상태 유지)
       this.emit({ type: 'submit_result', payload });
-      this.emit({ type: 'dice_reset', reason: 'fail' });
       this.emit({ type: 'state_changed' });
-
-      // 3분 타이머 재개 (이미 돌아가는 라운드 타이머로 복구)
-      const remainingMs = this.roundTimerEnd ? this.roundTimerEnd - Date.now() : 0;
-      if (remainingMs > 0) {
-        this.roundTimer = setTimeout(() => this.onRoundTimeout(), remainingMs);
-      } else {
-        this.onRoundTimeout();
-      }
     }
 
     return payload;
@@ -307,10 +294,8 @@ export class GameRoom {
 
   private onBuzzTimeout(): void {
     if (this.phase !== 'BUZZED') return;
-    const failedPlayerId = this.buzzedPlayerId;
-    const failedPlayer = failedPlayerId ? this.players.get(failedPlayerId) : undefined;
-    if (failedPlayer) failedPlayer.canBuzz = false;
 
+    // 버저 시간 초과: 주사위 유지, 누구나 다시 버저 가능
     this.phase = 'ROLLING';
     this.buzzedPlayerId = null;
     this.buzzTimerEnd = null;
