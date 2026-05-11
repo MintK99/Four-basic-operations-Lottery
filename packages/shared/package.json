@@ -1,0 +1,15 @@
+{
+  "name": "@lottery/shared",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
