@@ -21,10 +21,9 @@ export function FormulaBuilder() {
   const { roomState, playerId } = useGameStore();
   const myPlayer = useMyPlayer();
 
-  // 수식 슬롯: [카드, 연산자, 카드, 연산자, 카드, 연산자, 카드]
   const [cardSlots, setCardSlots] = useState<(Card | null)[]>([null, null, null, null]);
-  // 주사위 3개를 몇 번째 슬롯에 놓을지 배치
-  const [opSlots, setOpSlots] = useState<(Operator | null)[]>([null, null, null]);
+  // 주사위 인덱스(0·1·2)를 저장 — 어떤 주사위가 어느 슬롯에 들어갔는지 추적
+  const [opSlots, setOpSlots] = useState<(number | null)[]>([null, null, null]);
 
   if (!roomState || !myPlayer) return null;
 
@@ -34,14 +33,10 @@ export function FormulaBuilder() {
   if (!isMeBuzzed) return null;
   if (!currentOperators || currentOperators.length !== 3) return null;
 
-  // 이미 카드 슬롯에 들어간 카드 id 목록
+  // 이미 사용된 카드 id
   const usedCardIds = new Set(cardSlots.filter(Boolean).map((c) => c!.id));
-  // 이미 연산자 슬롯에 배치된 인덱스
-  const usedOpIndices = new Set(
-    opSlots.map((op, i) => (op !== null ? i : -1)).filter((i) => i >= 0)
-  );
-  // 아직 배치 안 된 주사위 연산자 인덱스
-  const availableOpIndices = [0, 1, 2].filter((i) => !usedOpIndices.has(i));
+  // 이미 사용된 주사위 인덱스
+  const usedDiceIndices = new Set(opSlots.filter((v) => v !== null) as number[]);
 
   function placeCard(card: Card, slotIndex: number) {
     setCardSlots((prev) => {
@@ -59,19 +54,18 @@ export function FormulaBuilder() {
     });
   }
 
-  function placeOperator(diceIndex: number, slotIndex: number) {
-    if (!currentOperators) return;
+  function placeOperator(diceIndex: number, formulaSlot: number) {
     setOpSlots((prev) => {
       const next = [...prev];
-      next[slotIndex] = currentOperators[diceIndex];
+      next[formulaSlot] = diceIndex;
       return next;
     });
   }
 
-  function removeOperator(slotIndex: number) {
+  function removeOperator(formulaSlot: number) {
     setOpSlots((prev) => {
       const next = [...prev];
-      next[slotIndex] = null;
+      next[formulaSlot] = null;
       return next;
     });
   }
@@ -81,16 +75,18 @@ export function FormulaBuilder() {
     setOpSlots([null, null, null]);
   }
 
-  // 수식 미리보기 계산
+  // opSlots의 주사위 인덱스를 실제 연산자 값으로 변환
+  const resolvedOps = opSlots.map((idx) => (idx !== null ? currentOperators[idx] : null));
+
   const allCardsFilled = cardSlots.every(Boolean);
-  const allOpsFilled = opSlots.every(Boolean);
+  const allOpsFilled = resolvedOps.every(Boolean);
   const canSubmit = allCardsFilled && allOpsFilled;
 
   let previewResult: number | null | undefined = undefined;
   let previewFormula = '';
   if (canSubmit) {
     const nums = cardSlots.map((c) => c!.value) as [number, number, number, number];
-    const ops = opSlots as [Operator, Operator, Operator];
+    const ops = resolvedOps as [Operator, Operator, Operator];
     const result = evaluate(nums, ops);
     previewResult = result.value;
     previewFormula = result.formula;
@@ -99,7 +95,7 @@ export function FormulaBuilder() {
   function handleSubmit() {
     if (!canSubmit) return;
     const nums = cardSlots.map((c) => c!.value) as [number, number, number, number];
-    const ops = opSlots as [Operator, Operator, Operator];
+    const ops = resolvedOps as [Operator, Operator, Operator];
     const submission: FormulaSubmission = { cardValues: nums, operators: ops };
     socket.emit('game:submit', submission, () => {});
     resetSlots();
@@ -115,16 +111,10 @@ export function FormulaBuilder() {
       <div className="flex items-center gap-1 justify-center mb-4 flex-wrap">
         {[0, 1, 2, 3].map((i) => (
           <div key={`slot-${i}`} className="flex items-center gap-1">
-            {/* 카드 슬롯 */}
-            <CardSlot
-              card={cardSlots[i]}
-              onRemove={() => removeCard(i)}
-            />
-
-            {/* 연산자 슬롯 (카드 슬롯 사이) */}
+            <CardSlot card={cardSlots[i]} onRemove={() => removeCard(i)} />
             {i < 3 && (
               <OperatorSlot
-                op={opSlots[i]}
+                op={resolvedOps[i] ?? null}
                 onRemove={() => removeOperator(i)}
               />
             )}
@@ -132,13 +122,12 @@ export function FormulaBuilder() {
         ))}
       </div>
 
-      {/* 사용 가능한 카드 패 */}
+      {/* 카드 패 */}
       <div className="mb-4">
         <p className="text-xs text-gray-400 mb-2">카드 선택 (4장)</p>
         <div className="flex flex-wrap gap-2">
           {myPlayer.cards.map((card) => {
             const used = usedCardIds.has(card.id);
-            // 빈 슬롯 찾기
             const emptySlot = cardSlots.findIndex((s) => s === null);
             return (
               <button
@@ -161,12 +150,13 @@ export function FormulaBuilder() {
         </div>
       </div>
 
-      {/* 사용 가능한 연산자 */}
+      {/* 연산자 선택 */}
       <div className="mb-4">
         <p className="text-xs text-gray-400 mb-2">연산자 배치</p>
         <div className="flex gap-2">
           {currentOperators.map((op, diceIdx) => {
-            const placed = !availableOpIndices.includes(diceIdx);
+            // 이 주사위가 이미 어느 수식 슬롯에 배치됐는지 확인
+            const placed = usedDiceIndices.has(diceIdx);
             const emptyOpSlot = opSlots.findIndex((s) => s === null);
             return (
               <button
