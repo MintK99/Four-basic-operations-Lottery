@@ -18,7 +18,7 @@ export interface Player {
   cards: Card[];
   completedNumbers: number[];
   canBuzz: boolean;
-  itemCooldownUntil: number;
+  itemUsesThisRound: number;
   isConnected: boolean;
   socketId: string;
 }
@@ -77,7 +77,7 @@ export class GameRoom {
       cards: this.dealCards(GAME_CONFIG.CARDS_PER_PLAYER),
       completedNumbers: [],
       canBuzz: true,
-      itemCooldownUntil: 0,
+      itemUsesThisRound: 0,
       isConnected: true,
       socketId,
     };
@@ -124,12 +124,11 @@ export class GameRoom {
     this.remainingNumbers = [...this.winningNumbers];
     this.phase = 'ROLLING';
 
-    // 모든 플레이어에게 카드 초기 지급
     for (const player of this.players.values()) {
       player.cards = this.dealCards(GAME_CONFIG.CARDS_PER_PLAYER);
       player.completedNumbers = [];
       player.canBuzz = true;
-      player.itemCooldownUntil = 0;
+      player.itemUsesThisRound = 0;
     }
 
     this.emit({ type: 'state_changed' });
@@ -145,9 +144,10 @@ export class GameRoom {
     this.buzzedPlayerId = null;
     this.buzzTimerEnd = null;
 
-    // 모든 플레이어의 canBuzz 초기화
+    // 라운드 시작: canBuzz 및 아이템 사용 횟수 초기화
     for (const player of this.players.values()) {
       player.canBuzz = true;
+      player.itemUsesThisRound = 0;
     }
 
     const roundTimerEnd = Date.now() + GAME_CONFIG.ROUND_TIMEOUT_MS;
@@ -164,7 +164,7 @@ export class GameRoom {
 
   handleBuzz(playerId: string): void {
     if (this.phase !== 'ROLLING') return;
-    if (this.buzzedPlayerId !== null) return; // 이미 버저 획득자 있음
+    if (this.buzzedPlayerId !== null) return;
 
     const player = this.players.get(playerId);
     if (!player || !player.canBuzz) return;
@@ -178,12 +178,7 @@ export class GameRoom {
     this.clearTimers();
     this.buzzTimer = setTimeout(() => this.onBuzzTimeout(), GAME_CONFIG.BUZZ_TIMEOUT_MS);
 
-    this.emit({
-      type: 'buzz_granted',
-      playerId,
-      playerName: player.name,
-      buzzTimerEnd,
-    });
+    this.emit({ type: 'buzz_granted', playerId, playerName: player.name, buzzTimerEnd });
     this.emit({ type: 'state_changed' });
   }
 
@@ -193,16 +188,20 @@ export class GameRoom {
     const player = this.players.get(playerId);
 
     if (!player || this.phase !== 'BUZZED' || this.buzzedPlayerId !== playerId) {
-      return {
-        playerId,
-        playerName: player?.name ?? '',
-        formula: '',
-        result: null,
-        success: false,
-      };
+      return { playerId, playerName: player?.name ?? '', formula: '', result: null, success: false };
     }
 
-    const { cardValues, operators } = submission;
+    const { cardIds, operators } = submission;
+
+    // 카드 ID로 실제 값을 조회
+    const cardMap = new Map(player.cards.map((c) => [c.id, c]));
+    const usedCards = cardIds.map((id) => cardMap.get(id)).filter((c): c is Card => c !== undefined);
+
+    if (usedCards.length !== 4) {
+      return { playerId, playerName: player.name, formula: '', result: null, success: false };
+    }
+
+    const cardValues = usedCards.map((c) => c.value) as [number, number, number, number];
     const evalResult = evaluate(cardValues, operators);
     const formula = evalResult.formula;
     const result = evalResult.value;
@@ -211,37 +210,19 @@ export class GameRoom {
       result !== null && this.remainingNumbers.includes(result) ? result : undefined;
     const success = matchedNumber !== undefined;
 
-    const payload: SubmitResultPayload = {
-      playerId,
-      playerName: player.name,
-      formula,
-      result,
-      success,
-      matchedNumber,
-    };
+    const payload: SubmitResultPayload = { playerId, playerName: player.name, formula, result, success, matchedNumber };
 
     if (success && matchedNumber !== undefined) {
-      // 당첨번호 제거
       this.remainingNumbers = this.remainingNumbers.filter((n) => n !== matchedNumber);
       player.completedNumbers.push(matchedNumber);
 
-      // 사용한 카드 4장 교체
-      const usedValues = new Set(cardValues);
-      let replaced = 0;
-      player.cards = player.cards.filter((c) => {
-        if (replaced < GAME_CONFIG.CARDS_REPLACED_ON_SUCCESS && usedValues.has(c.value)) {
-          usedValues.delete(c.value);
-          replaced++;
-          return false;
-        }
-        return true;
-      });
-      const newCards = this.dealCards(GAME_CONFIG.CARDS_REPLACED_ON_SUCCESS);
-      player.cards.push(...newCards);
+      // 사용한 카드 4장만 ID로 정확히 제거하고, 나머지 4장은 유지
+      const usedCardIdSet = new Set(cardIds);
+      player.cards = player.cards.filter((c) => !usedCardIdSet.has(c.id));
+      player.cards.push(...this.dealCards(GAME_CONFIG.CARDS_REPLACED_ON_SUCCESS));
 
       this.clearTimers();
 
-      // 승리 조건 확인
       if (player.completedNumbers.length >= GAME_CONFIG.WINNING_NUMBER_COUNT) {
         this.phase = 'GAME_OVER';
         this.winner = playerId;
@@ -251,7 +232,6 @@ export class GameRoom {
         return payload;
       }
 
-      // 다음 라운드
       this.phase = 'ROLLING';
       this.buzzedPlayerId = null;
       this.buzzTimerEnd = null;
@@ -260,7 +240,7 @@ export class GameRoom {
       this.emit({ type: 'state_changed' });
       this.rollDice();
     } else {
-      // 실패: 30초 타이머 내에서 재시도 가능 (BUZZED 상태 유지)
+      // 실패: 30초 내 재시도 가능 (BUZZED 상태 유지)
       this.emit({ type: 'submit_result', payload });
       this.emit({ type: 'state_changed' });
     }
@@ -268,23 +248,21 @@ export class GameRoom {
     return payload;
   }
 
-  // ── 아이템: 카드 교체 ─────────────────────────────────────
+  // ── 아이템: 카드 교체 (라운드당 4회) ────────────────────────
 
   handleUseItem(playerId: string, cardId: string): boolean {
     const player = this.players.get(playerId);
     if (!player) return false;
 
-    const now = Date.now();
-    if (player.itemCooldownUntil > now) return false;
+    if (player.itemUsesThisRound >= GAME_CONFIG.ITEM_USES_PER_ROUND) return false;
 
     const cardIndex = player.cards.findIndex((c) => c.id === cardId);
     if (cardIndex === -1) return false;
 
-    // 카드 교체
     player.cards.splice(cardIndex, 1);
     const [newCard] = this.dealCards(1);
     player.cards.push(newCard);
-    player.itemCooldownUntil = now + GAME_CONFIG.ITEM_COOLDOWN_MS;
+    player.itemUsesThisRound += 1;
 
     this.emit({ type: 'state_changed' });
     return true;
@@ -295,7 +273,6 @@ export class GameRoom {
   private onBuzzTimeout(): void {
     if (this.phase !== 'BUZZED') return;
 
-    // 버저 시간 초과: 주사위 유지, 누구나 다시 버저 가능
     this.phase = 'ROLLING';
     this.buzzedPlayerId = null;
     this.buzzTimerEnd = null;
@@ -303,7 +280,6 @@ export class GameRoom {
     this.emit({ type: 'dice_reset', reason: 'timeout' });
     this.emit({ type: 'state_changed' });
 
-    // 라운드 타이머 재개
     const remainingMs = this.roundTimerEnd ? this.roundTimerEnd - Date.now() : 0;
     if (remainingMs > 0) {
       this.roundTimer = setTimeout(() => this.onRoundTimeout(), remainingMs);
@@ -337,12 +313,10 @@ export class GameRoom {
   }
 
   private drawOperators(): Operator[] {
-    const ops = [...GAME_CONFIG.OPERATORS];
     const result: Operator[] = [];
     for (let i = 0; i < 3; i++) {
-      const idx = Math.floor(Math.random() * ops.length);
-      result.push(ops[idx]);
-      // 복원 추출 (같은 연산자 중복 가능)
+      const idx = Math.floor(Math.random() * GAME_CONFIG.OPERATORS.length);
+      result.push(GAME_CONFIG.OPERATORS[idx]);
     }
     return result;
   }
@@ -359,14 +333,8 @@ export class GameRoom {
   }
 
   private clearTimers(): void {
-    if (this.buzzTimer) {
-      clearTimeout(this.buzzTimer);
-      this.buzzTimer = null;
-    }
-    if (this.roundTimer) {
-      clearTimeout(this.roundTimer);
-      this.roundTimer = null;
-    }
+    if (this.buzzTimer) { clearTimeout(this.buzzTimer); this.buzzTimer = null; }
+    if (this.roundTimer) { clearTimeout(this.roundTimer); this.roundTimer = null; }
   }
 
   // ── 상태 스냅샷 ───────────────────────────────────────────
@@ -378,7 +346,7 @@ export class GameRoom {
       cards: p.cards,
       completedNumbers: p.completedNumbers,
       canBuzz: p.canBuzz,
-      itemCooldownUntil: p.itemCooldownUntil,
+      itemUsesThisRound: p.itemUsesThisRound,
       isConnected: p.isConnected,
     }));
 

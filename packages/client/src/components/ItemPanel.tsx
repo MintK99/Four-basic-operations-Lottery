@@ -1,23 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useGameStore, useMyPlayer } from '../store/gameStore';
+import { GAME_CONFIG } from '@lottery/shared';
 import socket from '../socket';
 
 export function ItemPanel() {
   const { roomState } = useGameStore();
   const myPlayer = useMyPlayer();
-  const [now, setNow] = useState(Date.now());
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   if (!roomState || !myPlayer) return null;
   if (roomState.phase === 'LOBBY' || roomState.phase === 'GAME_OVER') return null;
 
-  const cooldownRemaining = Math.max(0, myPlayer.itemCooldownUntil - now);
-  const canUseItem = cooldownRemaining === 0;
+  const usesLeft = GAME_CONFIG.ITEM_USES_PER_ROUND - myPlayer.itemUsesThisRound;
+  const canUseItem = usesLeft > 0;
 
   function handleUseItem() {
     if (!selectedCardId || !canUseItem) return;
@@ -27,16 +22,19 @@ export function ItemPanel() {
     });
   }
 
-  const cooldownMin = Math.ceil(cooldownRemaining / 60_000);
-
   return (
     <div className="bg-lottery-card rounded-xl p-4 border border-lottery-panel w-full">
-      <h2 className="text-white text-sm font-bold mb-3 tracking-wider uppercase opacity-70">
-        🃏 카드 교체 아이템
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-white text-sm font-bold tracking-wider uppercase opacity-70">
+          🃏 카드 교체
+        </h2>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${canUseItem ? 'bg-blue-700 text-blue-200' : 'bg-gray-700 text-gray-500'}`}>
+          남은 횟수: {usesLeft} / {GAME_CONFIG.ITEM_USES_PER_ROUND}
+        </span>
+      </div>
 
       {!canUseItem ? (
-        <p className="text-xs text-gray-500">쿨다운: {cooldownMin}분 남음</p>
+        <p className="text-xs text-gray-500">이번 라운드 교체 횟수를 모두 사용했습니다.</p>
       ) : (
         <>
           <p className="text-xs text-gray-400 mb-2">교체할 카드를 선택하세요</p>
@@ -70,7 +68,7 @@ export function ItemPanel() {
               }
             `}
           >
-            카드 교체 (30분 쿨다운)
+            카드 교체 (라운드당 {GAME_CONFIG.ITEM_USES_PER_ROUND}회)
           </button>
         </>
       )}

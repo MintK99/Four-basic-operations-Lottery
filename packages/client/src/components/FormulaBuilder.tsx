@@ -94,9 +94,9 @@ export function FormulaBuilder() {
 
   function handleSubmit() {
     if (!canSubmit) return;
-    const nums = cardSlots.map((c) => c!.value) as [number, number, number, number];
+    const ids = cardSlots.map((c) => c!.id) as [string, string, string, string];
     const ops = resolvedOps as [Operator, Operator, Operator];
-    const submission: FormulaSubmission = { cardValues: nums, operators: ops };
+    const submission: FormulaSubmission = { cardIds: ids, operators: ops };
     socket.emit('game:submit', submission, () => {});
     resetSlots();
   }

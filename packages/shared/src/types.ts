@@ -10,9 +10,9 @@ export interface PlayerState {
   id: string;
   name: string;
   cards: Card[];
-  completedNumbers: number[]; // 완성한 당첨번호 값 목록
-  canBuzz: boolean;           // 이번 라운드 버저 가능 여부
-  itemCooldownUntil: number;  // 카드 교체 아이템 쿨다운 만료 시각 (ms)
+  completedNumbers: number[];
+  canBuzz: boolean;
+  itemUsesThisRound: number; // 이번 라운드 카드 교체 사용 횟수
   isConnected: boolean;
 }
 
@@ -22,14 +22,14 @@ export interface GameRoomState {
   id: string;
   hostId: string;
   phase: GamePhase;
-  winningNumbers: number[];         // 6개 당첨번호 (1~45)
-  remainingNumbers: number[];       // 아직 완성 안 된 당첨번호
-  currentOperators: Operator[] | null; // 굴린 주사위 3개
+  winningNumbers: number[];
+  remainingNumbers: number[];
+  currentOperators: Operator[] | null;
   players: PlayerSnapshot[];
   buzzedPlayerId: string | null;
-  buzzTimerEnd: number | null;      // 15초 타이머 만료 Unix ms
-  roundTimerEnd: number | null;     // 3분 타이머 만료 Unix ms
-  winner: string | null;            // 승자 플레이어 id
+  buzzTimerEnd: number | null;
+  roundTimerEnd: number | null;
+  winner: string | null;
 }
 
 export interface PlayerSnapshot {
@@ -38,21 +38,18 @@ export interface PlayerSnapshot {
   cards: Card[];
   completedNumbers: number[];
   canBuzz: boolean;
-  itemCooldownUntil: number;
+  itemUsesThisRound: number;
   isConnected: boolean;
 }
 
-// 수식 제출 페이로드
+// 수식 제출 페이로드 — 카드 ID 기반으로 정확한 카드 추적
 export interface FormulaSubmission {
-  // 카드 4장 순서 (n1 op1 n2 op2 n3 op3 n4 형태)
-  cardValues: [number, number, number, number];
-  // 주사위 3개를 배치한 순서
+  cardIds: [string, string, string, string]; // 선택한 카드 4장의 ID
   operators: [Operator, Operator, Operator];
 }
 
 // ── Socket.io 이벤트 타입 ──────────────────────────────────────
 
-// Client → Server
 export interface ClientToServerEvents {
   'room:create': (payload: { playerName: string }, cb: (res: RoomCreateResponse) => void) => void;
   'room:join': (payload: { roomId: string; playerName: string }, cb: (res: RoomJoinResponse) => void) => void;
@@ -62,7 +59,6 @@ export interface ClientToServerEvents {
   'game:use_item': (payload: { cardId: string }, cb: (res: AckResponse) => void) => void;
 }
 
-// Server → Client
 export interface ServerToClientEvents {
   'room:state': (state: GameRoomState) => void;
   'game:dice_rolled': (payload: { operators: Operator[]; roundTimerEnd: number }) => void;
@@ -117,5 +113,5 @@ export const GAME_CONFIG = {
   OPERATORS: ['+', '-', '×', '÷', '^', '★'] as Operator[],
   BUZZ_TIMEOUT_MS: 30_000,
   ROUND_TIMEOUT_MS: 180_000,
-  ITEM_COOLDOWN_MS: 30 * 60_000,
+  ITEM_USES_PER_ROUND: 4, // 라운드당 카드 교체 최대 횟수
 } as const;
