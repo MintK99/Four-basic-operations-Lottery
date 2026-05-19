@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   Card,
   CardValue,
+  GameDifficulty,
   GamePhase,
   GameRoomState,
   Operator,
@@ -33,9 +34,18 @@ export type GameRoomEvent =
 
 export type EventListener = (event: GameRoomEvent) => void;
 
+interface OperatorCandidateScore {
+  operators: [Operator, Operator, Operator];
+  score: number;
+  matchedNumberCount: number;
+  formulaCount: number;
+  playerCount: number;
+}
+
 export class GameRoom {
   readonly id: string;
   readonly hostId: string;
+  readonly difficulty: GameDifficulty;
   private phase: GamePhase = 'LOBBY';
   private winningNumbers: number[] = [];
   private remainingNumbers: number[] = [];
@@ -50,12 +60,11 @@ export class GameRoom {
   private roundTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners: EventListener[] = [];
 
-  constructor(hostId: string) {
+  constructor(hostId: string, difficulty: GameDifficulty = 'easy') {
     this.id = uuidv4().slice(0, 6).toUpperCase();
     this.hostId = hostId;
+    this.difficulty = difficulty;
   }
-
-  // ── 이벤트 리스너 ─────────────────────────────────────────
 
   on(listener: EventListener): () => void {
     this.listeners.push(listener);
@@ -67,8 +76,6 @@ export class GameRoom {
   private emit(event: GameRoomEvent): void {
     for (const l of this.listeners) l(event);
   }
-
-  // ── 플레이어 관리 ─────────────────────────────────────────
 
   addPlayer(socketId: string, playerId: string, name: string): Player {
     const player: Player = {
@@ -115,8 +122,6 @@ export class GameRoom {
     return this.getConnectedPlayerCount() === 0;
   }
 
-  // ── 게임 시작 ─────────────────────────────────────────────
-
   startGame(): void {
     if (this.phase !== 'LOBBY' && this.phase !== 'GAME_OVER') return;
 
@@ -141,8 +146,6 @@ export class GameRoom {
     this.rollDice();
   }
 
-  // ── 주사위 굴리기 ─────────────────────────────────────────
-
   rollDice(): void {
     if (this.phase !== 'ROLLING') return;
 
@@ -150,7 +153,6 @@ export class GameRoom {
     this.buzzedPlayerId = null;
     this.buzzTimerEnd = null;
 
-    // 라운드 시작: canBuzz 및 아이템 사용 횟수 초기화
     for (const player of this.players.values()) {
       player.canBuzz = true;
       player.itemUsesThisRound = 0;
@@ -165,8 +167,6 @@ export class GameRoom {
     this.emit({ type: 'dice_rolled', operators: this.currentOperators, roundTimerEnd });
     this.emit({ type: 'state_changed' });
   }
-
-  // ── 버저 처리 ─────────────────────────────────────────────
 
   handleBuzz(playerId: string): void {
     if (this.phase !== 'ROLLING') return;
@@ -188,8 +188,6 @@ export class GameRoom {
     this.emit({ type: 'state_changed' });
   }
 
-  // ── 수식 제출 ─────────────────────────────────────────────
-
   handleSubmit(playerId: string, submission: FormulaSubmission): SubmitResultPayload {
     const player = this.players.get(playerId);
 
@@ -199,11 +197,27 @@ export class GameRoom {
 
     const { cardIds, operators } = submission;
 
-    // 카드 ID로 실제 값을 조회
+    if (!this.currentOperators || !this.operatorsMatchCurrentDice(operators)) {
+      const payload = {
+        playerId,
+        playerName: player.name,
+        formula: '허용되지 않은 연산자',
+        result: null,
+        success: false,
+      };
+      this.emit({ type: 'submit_result', payload });
+      this.emit({ type: 'state_changed' });
+      return payload;
+    }
+
+    if (new Set(cardIds).size !== GAME_CONFIG.CARDS_IN_FORMULA) {
+      return { playerId, playerName: player.name, formula: '', result: null, success: false };
+    }
+
     const cardMap = new Map(player.cards.map((c) => [c.id, c]));
     const usedCards = cardIds.map((id) => cardMap.get(id)).filter((c): c is Card => c !== undefined);
 
-    if (usedCards.length !== 4) {
+    if (usedCards.length !== GAME_CONFIG.CARDS_IN_FORMULA) {
       return { playerId, playerName: player.name, formula: '', result: null, success: false };
     }
 
@@ -222,7 +236,6 @@ export class GameRoom {
       this.remainingNumbers = this.remainingNumbers.filter((n) => n !== matchedNumber);
       player.completedNumbers.push(matchedNumber);
 
-      // 사용한 카드 4장만 ID로 정확히 제거하고, 나머지 4장은 유지
       const usedCardIdSet = new Set(cardIds);
       player.cards = player.cards.filter((c) => !usedCardIdSet.has(c.id));
       player.cards.push(...this.dealCards(GAME_CONFIG.CARDS_REPLACED_ON_SUCCESS));
@@ -246,15 +259,12 @@ export class GameRoom {
       this.emit({ type: 'state_changed' });
       this.rollDice();
     } else {
-      // 실패: 30초 내 재시도 가능 (BUZZED 상태 유지)
       this.emit({ type: 'submit_result', payload });
       this.emit({ type: 'state_changed' });
     }
 
     return payload;
   }
-
-  // ── 호스트 강제 재굴리기 ─────────────────────────────────────
 
   forceRerollDice(): void {
     if (this.phase === 'LOBBY' || this.phase === 'GAME_OVER') return;
@@ -265,8 +275,6 @@ export class GameRoom {
     this.rollDice();
   }
 
-  // ── 호스트 당첨번호 재추첨 ────────────────────────────────────
-
   forceRedrawNumbers(): void {
     if (this.phase === 'LOBBY' || this.phase === 'GAME_OVER') return;
     this.winningNumbers = this.generateWinningNumbers();
@@ -276,8 +284,6 @@ export class GameRoom {
     }
     this.emit({ type: 'state_changed' });
   }
-
-  // ── 아이템: 카드 교체 (라운드당 4회) ─────────────────────────
 
   handleUseItem(playerId: string, cardId: string): boolean {
     const player = this.players.get(playerId);
@@ -296,8 +302,6 @@ export class GameRoom {
     this.emit({ type: 'state_changed' });
     return true;
   }
-
-  // ── 타이머 콜백 ─────────────────────────────────────────────
 
   private onBuzzTimeout(): void {
     if (this.phase !== 'BUZZED') return;
@@ -330,8 +334,6 @@ export class GameRoom {
     this.rollDice();
   }
 
-  // ── 카드/연산자 유틸 ──────────────────────────────────────
-
   private dealCards(count: number): Card[] {
     const cards: Card[] = [];
     for (let i = 0; i < count; i++) {
@@ -341,11 +343,120 @@ export class GameRoom {
     return cards;
   }
 
-  private drawOperators(): Operator[] {
-    const result: Operator[] = [];
-    for (let i = 0; i < 3; i++) {
-      const idx = Math.floor(Math.random() * GAME_CONFIG.OPERATORS.length);
-      result.push(GAME_CONFIG.OPERATORS[idx]);
+  private drawOperators(): [Operator, Operator, Operator] {
+    const candidates = this.getAllOperatorRolls()
+      .map((operators) => this.scoreOperators(operators))
+      .filter((candidate) => candidate.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    if (candidates.length === 0) {
+      return this.drawRandomOperators();
+    }
+
+    return this.pickCandidateByDifficulty(candidates).operators;
+  }
+
+  private drawRandomOperators(): [Operator, Operator, Operator] {
+    return [
+      this.randomOperator(),
+      this.randomOperator(),
+      this.randomOperator(),
+    ];
+  }
+
+  private randomOperator(): Operator {
+    const idx = Math.floor(Math.random() * GAME_CONFIG.OPERATORS.length);
+    return GAME_CONFIG.OPERATORS[idx];
+  }
+
+  private getAllOperatorRolls(): [Operator, Operator, Operator][] {
+    const rolls: [Operator, Operator, Operator][] = [];
+    for (const first of GAME_CONFIG.OPERATORS) {
+      for (const second of GAME_CONFIG.OPERATORS) {
+        for (const third of GAME_CONFIG.OPERATORS) {
+          rolls.push([first, second, third]);
+        }
+      }
+    }
+    return rolls;
+  }
+
+  private scoreOperators(operators: [Operator, Operator, Operator]): OperatorCandidateScore {
+    const matchedNumbers = new Set<number>();
+    const playersWithAnswer = new Set<string>();
+    let formulaCount = 0;
+    const operatorOrders = this.uniquePermutations(operators, GAME_CONFIG.CARDS_IN_FORMULA - 1) as [Operator, Operator, Operator][];
+
+    for (const player of this.players.values()) {
+      const cardOrders = this.permutations(player.cards, GAME_CONFIG.CARDS_IN_FORMULA) as [Card, Card, Card, Card][];
+      for (const cards of cardOrders) {
+        const values = cards.map((card) => card.value) as [number, number, number, number];
+        for (const operatorOrder of operatorOrders) {
+          const { value } = evaluate(values, operatorOrder);
+          if (value !== null && this.remainingNumbers.includes(value)) {
+            matchedNumbers.add(value);
+            playersWithAnswer.add(player.id);
+            formulaCount += 1;
+          }
+        }
+      }
+    }
+
+    return {
+      operators,
+      matchedNumberCount: matchedNumbers.size,
+      formulaCount,
+      playerCount: playersWithAnswer.size,
+      score: matchedNumbers.size * 100 + playersWithAnswer.size * 40 + formulaCount,
+    };
+  }
+
+  private pickCandidateByDifficulty(candidates: OperatorCandidateScore[]): OperatorCandidateScore {
+    if (this.difficulty === 'easy') {
+      const maxScore = candidates[0].score;
+      const pool = candidates.filter((candidate) => candidate.score >= maxScore * 0.65).slice(0, 30);
+      return this.pickRandom(pool.length > 0 ? pool : candidates);
+    }
+
+    if (this.difficulty === 'normal') {
+      const start = Math.floor(candidates.length * 0.2);
+      const end = Math.max(start + 1, Math.floor(candidates.length * 0.7));
+      return this.pickRandom(candidates.slice(start, end));
+    }
+
+    const start = Math.floor(candidates.length * 0.65);
+    return this.pickRandom(candidates.slice(start));
+  }
+
+  private operatorsMatchCurrentDice(operators: [Operator, Operator, Operator]): boolean {
+    if (!this.currentOperators || this.currentOperators.length !== operators.length) return false;
+    const submitted = [...operators].sort();
+    const current = [...this.currentOperators].sort();
+    return submitted.every((operator, index) => operator === current[index]);
+  }
+
+  private pickRandom<T>(items: T[]): T {
+    return items[Math.floor(Math.random() * items.length)];
+  }
+
+  private uniquePermutations<T>(arr: T[], r: number): T[][] {
+    const seen = new Set<string>();
+    return this.permutations(arr, r).filter((item) => {
+      const key = JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private permutations<T>(arr: T[], r: number): T[][] {
+    if (r === 0) return [[]];
+    const result: T[][] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+      for (const perm of this.permutations(rest, r - 1)) {
+        result.push([arr[i], ...perm]);
+      }
     }
     return result;
   }
@@ -366,8 +477,6 @@ export class GameRoom {
     if (this.roundTimer) { clearTimeout(this.roundTimer); this.roundTimer = null; }
   }
 
-  // ── 상태 스냅샷 ───────────────────────────────────────────
-
   toSnapshot(): GameRoomState {
     const players: PlayerSnapshot[] = [...this.players.values()].map((p) => ({
       id: p.id,
@@ -382,6 +491,7 @@ export class GameRoom {
     return {
       id: this.id,
       hostId: this.hostId,
+      difficulty: this.difficulty,
       phase: this.phase,
       winningNumbers: this.winningNumbers,
       remainingNumbers: this.remainingNumbers,
