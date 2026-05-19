@@ -29,9 +29,9 @@ const manager = new GameManager(io);
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  socket.on('room:create', ({ playerName }, cb) => {
+  socket.on('room:create', ({ playerName, difficulty }, cb) => {
     try {
-      const { roomId, playerId } = manager.createRoom(socket, playerName);
+      const { roomId, playerId } = manager.createRoom(socket, playerName, difficulty ?? 'easy');
       cb({ ok: true, roomId, playerId });
     } catch (e) {
       cb({ ok: false, message: String(e) });
