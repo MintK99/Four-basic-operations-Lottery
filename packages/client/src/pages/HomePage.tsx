@@ -137,7 +137,7 @@ export function HomePage({ onEnterGame }: { onEnterGame: () => void }) {
         {/* 룰 요약 */}
         <div className="mt-6 text-xs text-gray-500 text-center space-y-1">
           <p>숫자카드 8장 중 4장 + 연산자 3개로 당첨번호와 같은 수식을 만드세요.</p>
-          <p>먼저 버저를 누른 플레이어에게 15초가 주어집니다.</p>
+          <p>먼저 버저를 누른 플레이어에게 30초가 주어집니다.</p>
           <p>6개를 먼저 완성한 플레이어가 승리!</p>
         </div>
       </div>
