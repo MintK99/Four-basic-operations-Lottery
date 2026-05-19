@@ -1,6 +1,13 @@
 import { useState } from 'react';
+import { GameDifficulty } from '@lottery/shared';
 import { useGameStore } from '../store/gameStore';
 import socket from '../socket';
+
+const DIFFICULTY_OPTIONS: { value: GameDifficulty; label: string; description: string }[] = [
+  { value: 'easy', label: '쉬움', description: '정답 후보가 많은 연산자 위주' },
+  { value: 'normal', label: '보통', description: '중간 난이도 연산자 위주' },
+  { value: 'hard', label: '어려움', description: '정답 후보가 적은 연산자 위주' },
+];
 
 export function HomePage({ onEnterGame }: { onEnterGame: () => void }) {
   const { setSession, setPlayerName, playerName } = useGameStore();
@@ -8,6 +15,7 @@ export function HomePage({ onEnterGame }: { onEnterGame: () => void }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [difficulty, setDifficulty] = useState<GameDifficulty>('easy');
 
   function connect(fn: () => void) {
     setError('');
@@ -26,7 +34,7 @@ export function HomePage({ onEnterGame }: { onEnterGame: () => void }) {
 
   function handleCreate() {
     connect(() => {
-      socket.emit('room:create', { playerName: playerName.trim() }, (res) => {
+      socket.emit('room:create', { playerName: playerName.trim(), difficulty }, (res) => {
         setLoading(false);
         if (res.ok && res.roomId && res.playerId) {
           setSession(res.playerId, res.roomId);
@@ -103,6 +111,30 @@ export function HomePage({ onEnterGame }: { onEnterGame: () => void }) {
               </button>
             ))}
           </div>
+
+          {/* 난이도 선택 */}
+          {tab === 'create' && (
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-1 font-medium">난이도</label>
+              <div className="grid grid-cols-3 gap-1 bg-lottery-dark rounded-lg p-1">
+                {DIFFICULTY_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    title={option.description}
+                    onClick={() => setDifficulty(option.value)}
+                    className={`py-2 rounded-md text-xs font-bold transition-all ${
+                      difficulty === option.value
+                        ? 'bg-lottery-gold text-lottery-dark'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 룸 참가 입력 */}
           {tab === 'join' && (
