@@ -118,10 +118,16 @@ export class GameRoom {
   // ── 게임 시작 ─────────────────────────────────────────────
 
   startGame(): void {
-    if (this.phase !== 'LOBBY') return;
+    if (this.phase !== 'LOBBY' && this.phase !== 'GAME_OVER') return;
 
+    this.clearTimers();
     this.winningNumbers = this.generateWinningNumbers();
     this.remainingNumbers = [...this.winningNumbers];
+    this.currentOperators = null;
+    this.buzzedPlayerId = null;
+    this.buzzTimerEnd = null;
+    this.roundTimerEnd = null;
+    this.winner = null;
     this.phase = 'ROLLING';
 
     for (const player of this.players.values()) {
@@ -271,7 +277,7 @@ export class GameRoom {
     this.emit({ type: 'state_changed' });
   }
 
-  // ── 아이템: 카드 교체 (라운드당 4회) ────────────────────────
+  // ── 아이템: 카드 교체 (라운드당 4회) ─────────────────────────
 
   handleUseItem(playerId: string, cardId: string): boolean {
     const player = this.players.get(playerId);
@@ -291,7 +297,7 @@ export class GameRoom {
     return true;
   }
 
-  // ── 타이머 콜백 ───────────────────────────────────────────
+  // ── 타이머 콜백 ─────────────────────────────────────────────
 
   private onBuzzTimeout(): void {
     if (this.phase !== 'BUZZED') return;
@@ -324,7 +330,7 @@ export class GameRoom {
     this.rollDice();
   }
 
-  // ── 카드/연산자 유틸 ─────────────────────────────────────
+  // ── 카드/연산자 유틸 ──────────────────────────────────────
 
   private dealCards(count: number): Card[] {
     const cards: Card[] = [];
