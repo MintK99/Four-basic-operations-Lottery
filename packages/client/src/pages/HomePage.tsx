@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GameDifficulty } from '@lottery/shared';
+import type { GameDifficulty } from '@lottery/shared';
 import { useGameStore } from '../store/gameStore';
 import socket from '../socket';
 
