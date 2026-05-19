@@ -5,6 +5,7 @@ import {
   ClientToServerEvents,
   ServerToClientEvents,
   FormulaSubmission,
+  GameDifficulty,
 } from '@lottery/shared';
 
 type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -24,11 +25,11 @@ export class GameManager {
     this.io = io;
   }
 
-  // ── 룸 생성 ───────────────────────────────────────────────
+  // ── 룸 생성 ────────────────────────────────────────────────
 
-  createRoom(socket: AppSocket, playerName: string): { roomId: string; playerId: string } {
+  createRoom(socket: AppSocket, playerName: string, difficulty: GameDifficulty = 'easy'): { roomId: string; playerId: string } {
     const playerId = uuidv4();
-    const room = new GameRoom(playerId);
+    const room = new GameRoom(playerId, difficulty);
     this.rooms.set(room.id, room);
 
     this.setupRoomEvents(room);
@@ -40,7 +41,7 @@ export class GameManager {
     return { roomId: room.id, playerId };
   }
 
-  // ── 룸 참가 ───────────────────────────────────────────────
+  // ── 룸 참가 ────────────────────────────────────────────────
 
   joinRoom(
     socket: AppSocket,
@@ -58,7 +59,7 @@ export class GameManager {
     return { ok: true, playerId };
   }
 
-  // ── 게임 시작 ─────────────────────────────────────────────
+  // ── 게임 시작 ──────────────────────────────────────────────
 
   startGame(socketId: string): { ok: boolean; message?: string } {
     const session = this.sessions.get(socketId);
@@ -73,7 +74,7 @@ export class GameManager {
     return { ok: true };
   }
 
-  // ── 버저 ──────────────────────────────────────────────────
+  // ── 버저 ───────────────────────────────────────────────────
 
   handleBuzz(socketId: string): void {
     const session = this.sessions.get(socketId);
@@ -85,7 +86,7 @@ export class GameManager {
     room.handleBuzz(session.playerId);
   }
 
-  // ── 수식 제출 ─────────────────────────────────────────────
+  // ── 수식 제출 ──────────────────────────────────────────────
 
   handleSubmit(socketId: string, submission: FormulaSubmission): void {
     const session = this.sessions.get(socketId);
@@ -97,7 +98,7 @@ export class GameManager {
     room.handleSubmit(session.playerId, submission);
   }
 
-  // ── 아이템 사용 ───────────────────────────────────────────
+  // ── 아이템 사용 ────────────────────────────────────────────
 
   handleUseItem(socketId: string, cardId: string): boolean {
     const session = this.sessions.get(socketId);
@@ -109,7 +110,7 @@ export class GameManager {
     return room.handleUseItem(session.playerId, cardId);
   }
 
-  // ── 호스트 전용 ───────────────────────────────────────────
+  // ── 호스트 전용 ────────────────────────────────────────────
 
   handleRerollDice(socketId: string): { ok: boolean; message?: string } {
     const session = this.sessions.get(socketId);
@@ -131,7 +132,7 @@ export class GameManager {
     return { ok: true };
   }
 
-  // ── 연결 해제 ─────────────────────────────────────────────
+  // ── 연결 해제 ──────────────────────────────────────────────
 
   handleDisconnect(socketId: string): void {
     const session = this.sessions.get(socketId);
@@ -154,7 +155,7 @@ export class GameManager {
     this.sessions.delete(socketId);
   }
 
-  // ── 룸 이벤트 → Socket.io 브로드캐스트 ───────────────────
+  // ── 룸 이벤트 → Socket.io 브로드캐스트 ─────────────────────
 
   private setupRoomEvents(room: GameRoom): void {
     room.on((event: GameRoomEvent) => {
