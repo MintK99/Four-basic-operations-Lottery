@@ -1,5 +1,6 @@
 export type Operator = '+' | '-' | '×' | '÷' | '^' | '★';
 export type CardValue = 1 | 2 | 3 | 4 | 5 | 6;
+export type GameDifficulty = 'easy' | 'normal' | 'hard';
 
 export interface Card {
   id: string;
@@ -21,6 +22,7 @@ export type GamePhase = 'LOBBY' | 'ROLLING' | 'BUZZED' | 'GAME_OVER';
 export interface GameRoomState {
   id: string;
   hostId: string;
+  difficulty: GameDifficulty;
   phase: GamePhase;
   winningNumbers: number[];
   remainingNumbers: number[];
@@ -51,7 +53,7 @@ export interface FormulaSubmission {
 // ── Socket.io 이벤트 타입 ──────────────────────────────────────
 
 export interface ClientToServerEvents {
-  'room:create': (payload: { playerName: string }, cb: (res: RoomCreateResponse) => void) => void;
+  'room:create': (payload: { playerName: string; difficulty?: GameDifficulty }, cb: (res: RoomCreateResponse) => void) => void;
   'room:join': (payload: { roomId: string; playerName: string }, cb: (res: RoomJoinResponse) => void) => void;
   'game:start': (cb: (res: AckResponse) => void) => void;
   'game:buzz': (payload: { clientTimestamp: number }) => void;
@@ -71,7 +73,7 @@ export interface ServerToClientEvents {
   'error': (payload: { message: string }) => void;
 }
 
-// ── ACK 응답 타입 ─────────────────────────────────────────────
+// ── ACK 응답 타입 ──────────────────────────────────────────────
 
 export interface AckResponse {
   ok: boolean;
