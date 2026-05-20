@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Card, Operator, FormulaSubmission } from '@lottery/shared';
-import { evaluate } from '@lottery/shared';
 import { useGameStore, useMyPlayer } from '../store/gameStore';
 import socket from '../socket';
 
@@ -82,15 +81,14 @@ export function FormulaBuilder() {
   const allOpsFilled = resolvedOps.every(Boolean);
   const canSubmit = allCardsFilled && allOpsFilled;
 
-  let previewResult: number | null | undefined = undefined;
-  let previewFormula = '';
-  if (canSubmit) {
-    const nums = cardSlots.map((c) => c!.value) as [number, number, number, number];
-    const ops = resolvedOps as [Operator, Operator, Operator];
-    const result = evaluate(nums, ops);
-    previewResult = result.value;
-    previewFormula = result.formula;
-  }
+  const previewFormula = canSubmit
+    ? cardSlots
+        .map((card, index) => {
+          const op = resolvedOps[index];
+          return `${card!.value}${op ? OPERATOR_DISPLAY[op] : ''}`;
+        })
+        .join('')
+    : '';
 
   function handleSubmit() {
     if (!canSubmit) return;
@@ -183,12 +181,7 @@ export function FormulaBuilder() {
       {/* 미리보기 */}
       {canSubmit && (
         <div className="mb-4 text-center">
-          <span className="text-gray-300 font-mono text-sm">{previewFormula} = </span>
-          {previewResult !== null ? (
-            <span className="text-lottery-gold font-bold text-lg">{previewResult}</span>
-          ) : (
-            <span className="text-red-400 font-bold">무효</span>
-          )}
+          <span className="text-gray-300 font-mono text-sm">{previewFormula}</span>
         </div>
       )}
 
@@ -202,11 +195,11 @@ export function FormulaBuilder() {
         </button>
         <button
           onClick={handleSubmit}
-          disabled={!canSubmit || previewResult === null}
+          disabled={!canSubmit}
           className={`
             flex-2 flex-grow py-2 rounded-lg font-bold text-sm transition-all
             ${
-              canSubmit && previewResult !== null
+              canSubmit
                 ? 'bg-lottery-gold text-lottery-dark hover:brightness-110 active:scale-95 shadow-md'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }
