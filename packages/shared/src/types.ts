@@ -13,8 +13,9 @@ export interface PlayerState {
   cards: Card[];
   completedNumbers: number[];
   canBuzz: boolean;
-  itemUsesThisRound: number; // 이번 라운드 카드 교체 사용 횟수
+  itemUsesThisRound: number;
   isConnected: boolean;
+  isBot: boolean;
 }
 
 export type GamePhase = 'LOBBY' | 'ROLLING' | 'BUZZED' | 'GAME_OVER';
@@ -42,15 +43,13 @@ export interface PlayerSnapshot {
   canBuzz: boolean;
   itemUsesThisRound: number;
   isConnected: boolean;
+  isBot: boolean;
 }
 
-// 수식 제출 페이로드 — 카드 ID 기반으로 정확한 카드 추적
 export interface FormulaSubmission {
-  cardIds: [string, string, string, string]; // 선택한 카드 4장의 ID
+  cardIds: [string, string, string, string];
   operators: [Operator, Operator, Operator];
 }
-
-// ── Socket.io 이벤트 타입 ──────────────────────────────────────
 
 export interface ClientToServerEvents {
   'room:create': (payload: { playerName: string; difficulty?: GameDifficulty }, cb: (res: RoomCreateResponse) => void) => void;
@@ -72,8 +71,6 @@ export interface ServerToClientEvents {
   'game:over': (payload: { winnerId: string; winnerName: string }) => void;
   'error': (payload: { message: string }) => void;
 }
-
-// ── ACK 응답 타입 ──────────────────────────────────────────────
 
 export interface AckResponse {
   ok: boolean;
@@ -103,8 +100,6 @@ export interface SubmitResultPayload {
   matchedNumber?: number;
 }
 
-// ── 게임 상수 ─────────────────────────────────────────────────
-
 export const GAME_CONFIG = {
   WINNING_NUMBER_COUNT: 6,
   WINNING_NUMBER_MIN: 1,
@@ -117,5 +112,5 @@ export const GAME_CONFIG = {
   OPERATORS: ['+', '-', '×', '÷', '^', '★'] as Operator[],
   BUZZ_TIMEOUT_MS: 30_000,
   ROUND_TIMEOUT_MS: 180_000,
-  ITEM_USES_PER_ROUND: 1000, // 라운드당 카드 교체 최대 횟수
+  ITEM_USES_PER_ROUND: 1000,
 } as const;
