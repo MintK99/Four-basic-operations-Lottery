@@ -7,12 +7,11 @@ export function BuzzerButton() {
 
   if (!roomState || !myPlayer) return null;
 
-  const { phase, buzzedPlayerId } = roomState;
-
+  const { phase, buzzedPlayerId, players } = roomState;
   const isBuzzed = buzzedPlayerId === playerId;
-  const canPress =
-    phase === 'ROLLING' && myPlayer.canBuzz && buzzedPlayerId === null;
-  const isSomeoneElseBuzzed = phase === 'BUZZED' && !isBuzzed;
+  const buzzedPlayer = players.find((player) => player.id === buzzedPlayerId);
+  const canPress = phase === 'ROLLING' && myPlayer.canBuzz && buzzedPlayerId === null;
+  const isOpponentBuzzed = phase === 'BUZZED' && !isBuzzed;
 
   function handleBuzz() {
     if (!canPress) return;
@@ -36,14 +35,13 @@ export function BuzzerButton() {
           }
         `}
       >
-        {isBuzzed ? '🔔 입력 중' : '🔔 버저'}
+        {isBuzzed ? '입력 중' : '버저'}
       </button>
 
       <div className="text-xs text-center text-gray-400 h-4">
-        {isBuzzed && '수식을 완성하세요!'}
-        {isSomeoneElseBuzzed && '다른 플레이어가 답변 중...'}
-        {!myPlayer.canBuzz && phase === 'ROLLING' && '이번 라운드 참여 불가'}
-        {phase === 'LOBBY' && '게임 시작을 기다리는 중...'}
+        {isBuzzed && '30초 안에 수식을 완성하세요.'}
+        {isOpponentBuzzed && `${buzzedPlayer?.name ?? 'AI'}가 답을 제출하는 중...`}
+        {phase === 'LOBBY' && '게임을 준비하는 중...'}
       </div>
     </div>
   );
